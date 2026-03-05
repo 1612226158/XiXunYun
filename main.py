@@ -1,12 +1,41 @@
 import httpx
 import time
+import os  # 引入 os 模块以读取环境变量
 
 # 假设 randomize 是一个自定义模块
 from utils.randomize import generate
 from utils.location import encrypted_latitude, encrypted_longitude
-from utils.wechatPush import send_push_notification
-from utils.data import account, password, school_id, province, city, address, address_name, pushPlus_set
+# from utils.wechatPush import send_push_notification # 不再使用旧推送
+from utils.data import account, password, school_id, province, city, address, address_name
 
+def send_server_chan(title, content):
+    """
+    使用 Server酱 发送推送消息
+    从环境变量获取 SERVER_CHAN_SENDKEY
+    """
+    # 获取 GitHub Secrets 中设置的环境变量
+    send_key = os.environ.get("SERVER_CHAN_SENDKEY")
+    
+    if not send_key:
+        print("⚠️ 未检测到 SERVER_CHAN_SENDKEY 环境变量，跳过 Server酱 推送")
+        return
+
+    url = f"https://sctapi.ftqq.com/{send_key}.send"
+    data = {
+        'title': title,
+        'desp': content
+    }
+    
+    try:
+        # 使用 httpx 发送 POST 请求
+        response = httpx.post(url, data=data)
+        resp_json = response.json()
+        if resp_json.get('code') == 0:
+            print("✅ Server酱推送成功")
+        else:
+            print(f"❌ Server酱推送失败: {resp_json}")
+    except Exception as e:
+        print(f"❌ Server酱发送请求异常: {e}")
 
 
 def login_and_get_token():
@@ -40,14 +69,16 @@ def login_and_get_token():
                 cookies = login_response.cookies
                 token = login_response.json()['data']['token']
                 print("登录成功")
-                print(f"获取cookies成功")
-                print(f"获取token成功")
                 return token, cookies
             else:
-                print(f"登录失败，信息：{login_response_data.get('message')}")
+                msg = login_response_data.get('message')
+                print(f"登录失败，信息：{msg}")
+                # 登录失败也尝试推送
+                send_server_chan("习讯云登录失败", f"账号：{account}\n原因：{msg}")
                 return None, None
     except httpx.RequestError as e:
         print(f"登录时发生请求错误：{e}")
+        return None, None
 
 
 def signin_with_token(token, cookies):
@@ -77,25 +108,21 @@ def signin_with_token(token, cookies):
             sign_message = sign_response_data.get('message')
 
             if sign_response_data.get('code') == 20000:
-                signin_result = "签到成功"
+                signin_result = "习讯云签到成功"
                 print(f"{signin_result}，信息：{sign_message}")
-
-                if pushPlus_set == 1:
-                    send_push_notification(signin_result, sign_message)
-                elif pushPlus_set == 0:
-                    print("推送未开启，请检查推送设置")
+                # 发送成功推送
+                send_server_chan(signin_result, f"时间：{time.strftime('%Y-%m-%d %H:%M:%S')}\n信息：{sign_message}")
 
             else:
-                signin_result = "签到失败"
+                signin_result = "习讯云签到失败"
                 print(f"{signin_result}，信息：{sign_message}")
-                if pushPlus_set != 0:
-                    send_push_notification(signin_result, sign_message)
-                elif pushPlus_set == 0:
-                    print("推送未开启，请检查推送设置")
-                return None, None
-                # 发送签到结果推送
+                # 发送失败推送
+                send_server_chan(signin_result, f"时间：{time.strftime('%Y-%m-%d %H:%M:%S')}\n错误信息：{sign_message}")
+                
     except httpx.RequestError as e:
-        print(f"登录时发生请求错误：{e}")
+        err_msg = f"签到请求发生异常：{e}"
+        print(err_msg)
+        send_server_chan("习讯云脚本错误", err_msg)
 
 
 if __name__ == "__main__":
