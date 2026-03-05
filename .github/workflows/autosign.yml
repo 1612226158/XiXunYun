@@ -38,4 +38,5 @@ jobs:
           CITY: ${{ secrets.CITY }}
           PUSHPLUS_SET: ${{ secrets.PUSHPLUS_SET }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          SERVER_CHAN_SENDKEY: ${{ secrets.SERVER_CHAN_SENDKEY }}
         run: python main.py
